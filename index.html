@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ruleta de Descuentos - The Scent Club</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #d4af37;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    p.sub {
+      color: #ccc;
+      margin-bottom: 25px;
+      text-align: center;
+      max-width: 320px;
+    }
+
+    .roulette-container {
+      position: relative;
+      width: 320px;
+      height: 320px;
+      margin-bottom: 30px;
+    }
+
+    .marker {
+      position: absolute;
+      top: -15px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-top: 25px solid #d4af37;
+      z-index: 10;
+    }
+
+    #wheel {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 5px solid #d4af37;
+      box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+      transition: transform 4s cubic-bezier(0.15, 0.9, 0.15, 1);
+    }
+
+    .spin-btn {
+      background: linear-gradient(135deg, #d4af37, #aa820a);
+      color: #000;
+      font-weight: bold;
+      font-size: 1.1rem;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 25px;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .spin-btn:hover {
+      transform: scale(1.05);
+    }
+
+    .spin-btn:disabled {
+      background: #555;
+      color: #888;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #result-box {
+      margin-top: 25px;
+      text-align: center;
+      display: none;
+    }
+
+    .prize-title {
+      font-size: 1.3rem;
+      color: #d4af37;
+      margin-bottom: 15px;
+    }
+
+    .ws-btn {
+      display: inline-block;
+      background-color: #25d366;
+      color: white;
+      text-decoration: none;
+      padding: 12px 25px;
+      border-radius: 25px;
+      font-weight: bold;
+      box-shadow: 0 4px 10px rgba(37, 211, 102, 0.3);
+    }
+
+    /* Estilos cuando la ruleta está desactivada */
+    .closed-banner {
+      background: #1e1e1e;
+      border: 1px solid #d4af37;
+      padding: 20px;
+      border-radius: 15px;
+      text-align: center;
+      max-width: 320px;
+      display: none;
+    }
+
+    .closed-banner h2 {
+      color: #d4af37;
+      margin-bottom: 10px;
+    }
+
+    .closed-banner p {
+      color: #ddd;
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>The Scent Club</h1>
+  <p id="sub-title" class="sub">Gira la ruleta y obtén tu descuento exclusivo</p>
+
+  <div id="roulette-wrapper" class="roulette-container">
+    <div class="marker"></div>
+    <canvas id="wheel" width="320" height="320"></canvas>
+  </div>
+
+  <button id="spin-btn" class="spin-btn" onclick="spinWheel()">¡GIRAR RULETA!</button>
+
+  <div id="closed-box" class="closed-banner">
+    <h2>🔒 Dinámica Pausada</h2>
+    <p>La ruleta de descuentos no está activa en este momento.<br><br>Mantente atento a las notificaciones de nuestro <b>Canal de WhatsApp</b> para el próximo ruletazo. 🎯</p>
+  </div>
+
+  <div id="result-box">
+    <div id="prize-text" class="prize-title"></div>
+    <a id="ws-link" class="ws-btn" href="#" target="_blank">Reclamar Premio por WhatsApp</a>
+  </div>
+
+  <script>
+    // ========================================================
+    // CONTROL DE ACTIVACIÓN
+    // Cambia a true para ACTIVAR la ruleta en días especiales.
+    // Cambia a false para DESACTIVARLA cuando termine la dinámica.
+    // ========================================================
+    const RULETA_ACTIVA = true; 
+
+    const PHONE_NUMBER = "5216624203689";
+
+    const slices = [
+      { label: "¡Gira de nuevo!", code: "SPINAGAIN", color: "#1a1a1a" },
+      { label: "5% OFF", code: "TSC5", color: "#d4af37" },
+      { label: "10% OFF", code: "TSC10", color: "#b8860b" },
+      { label: "15% OFF", code: "TSC15MAX", color: "#e5c158" },
+      { label: "¡Gira de nuevo!", code: "SPINAGAIN", color: "#2a2a2a" },
+      { label: "5% OFF", code: "TSC5", color: "#d4af37" },
+      { label: "¡Gira de nuevo!", code: "SPINAGAIN", color: "#1a1a1a" },
+      { label: "10% OFF", code: "TSC10", color: "#b8860b" }
+    ];
+
+    const canvas = document.getElementById('wheel');
+    const ctx = canvas.getContext('2d');
+    const size = canvas.width;
+    const center = size / 2;
+    const totalSlices = slices.length;
+    const sliceAngle = (2 * Math.PI) / totalSlices;
+
+    // Comprobar estado de activación al cargar
+    if (!RULETA_ACTIVA) {
+      document.getElementById('roulette-wrapper').style.display = 'none';
+      document.getElementById('spin-btn').style.display = 'none';
+      document.getElementById('sub-title').style.display = 'none';
+      document.getElementById('closed-box').style.display = 'block';
+    }
+
+    function drawWheel() {
+      const startOffset = -Math.PI / 2;
+
+      slices.forEach((slice, i) => {
+        const angle = startOffset + (i * sliceAngle);
+        
+        ctx.beginPath();
+        ctx.fillStyle = slice.color;
+        ctx.moveTo(center, center);
+        ctx.arc(center, center, center, angle, angle + sliceAngle);
+        ctx.lineTo(center, center);
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(center, center);
+        ctx.rotate(angle + sliceAngle / 2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = (slice.color === "#d4af37" || slice.color === "#e5c158") ? "#000" : "#fff";
+        ctx.font = "bold 13px Arial";
+        ctx.fillText(slice.label, center - 15, 5);
+        ctx.restore();
+      });
+    }
+
+    drawWheel();
+
+    let currentRotation = 0;
+
+    // Probabilidades (Opción 3 Conservadora):
+    // 15% OFF: 5% | 10% OFF: 10% | 5% OFF: 25% | ¡Gira de nuevo!: 60%
+    function getWeightedPrize() {
+      const rand = Math.random() * 100;
+
+      if (rand < 5) {
+        return { sliceIndex: 3 }; // 15% OFF
+      } else if (rand < 15) {
+        return { sliceIndex: Math.random() > 0.5 ? 2 : 7 }; // 10% OFF
+      } else if (rand < 40) {
+        return { sliceIndex: Math.random() > 0.5 ? 1 : 5 }; // 5% OFF
+      } else {
+        return { sliceIndex: [0, 4, 6][Math.floor(Math.random() * 3)] }; // Gira de nuevo
+      }
+    }
+
+    function spinWheel() {
+      if (!RULETA_ACTIVA) return;
+
+      const spinBtn = document.getElementById('spin-btn');
+      spinBtn.disabled = true;
+
+      const resultBox = document.getElementById('result-box');
+      resultBox.style.display = "none";
+
+      const prizeSelection = getWeightedPrize();
+      const prizeIndex = prizeSelection.sliceIndex;
+      const prize = slices[prizeIndex];
+
+      const degreesPerSlice = 360 / totalSlices;
+      const targetDegree = 360 - (prizeIndex * degreesPerSlice);
+      const extraRounds = 360 * 5;
+
+      const nextRotation = currentRotation + extraRounds + (targetDegree - (currentRotation % 360));
+      currentRotation = nextRotation;
+
+      canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+      setTimeout(() => {
+        showResult(prize);
+      }, 4000);
+    }
+
+    function showResult(prize) {
+      const resultBox = document.getElementById('result-box');
+      const prizeText = document.getElementById('prize-text');
+      const wsLink = document.getElementById('ws-link');
+      const spinBtn = document.getElementById('spin-btn');
+
+      resultBox.style.display = "block";
+
+      if (prize.code === "SPINAGAIN") {
+        prizeText.innerText = "¡Te tocó: Gira de nuevo! 🔄 Vuelve a presionar el botón.";
+        wsLink.innerText = "Ver catálogo en WhatsApp";
+        const msg = encodeURIComponent("¡Hola! Estuve participando en la ruleta del Canal de The Scent Club. ¿Me compartes el catálogo actual?");
+        wsLink.href = `https://wa.me/${PHONE_NUMBER}?text=${msg}`;
+        spinBtn.disabled = false;
+      } else {
+        prizeText.innerText = `🎉 ¡Felicidades! Ganaste un ${prize.label} de descuento`;
+        wsLink.innerText = "Reclamar Premio por WhatsApp";
+        const msg = encodeURIComponent(`¡Hola! Gané un ${prize.label} de descuento en la ruleta de The Scent Club (Código: ${prize.code}). ¿Me ayudan a aplicarlo en mi pedido?`);
+        wsLink.href = `https://wa.me/${PHONE_NUMBER}?text=${msg}`;
+      }
+    }
+  </script>
+</body>
+</html>
